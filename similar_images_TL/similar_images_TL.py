@@ -11,53 +11,56 @@
 import sys, os
 import numpy as np
 from keras.preprocessing import image
+from keras.applications.inception_resnet_v2 import InceptionResNetV2
+from keras.applications.inception_resnet_v2 import preprocess_input, decode_predictions
 from keras.models import Model
-sys.path.append("src")
 
-from vgg19 import VGG19
-from imagenet_utils import preprocess_input
-from plot_utils import plot_query_answer
-from sort_utils import find_topk_unique
-from kNN import kNN
-from tSNE import plot_tsne
+from src.plot_utils import plot_query_answer
+from src.sort_utils import find_topk_unique
+from src.kNN import kNN
+from src.tSNE import plot_tsne
+
+from pathlib import Path
+import tqdm
+
 
 def main():
     # ================================================
     # Load pre-trained model and remove higher level layers
     # ================================================
-    print("Loading VGG19 pre-trained model...")
-    base_model = VGG19(weights='imagenet')
-    model = Model(input=base_model.input,
-                  output=base_model.get_layer('block4_pool').output)
+    print("Loading inception_resnet_v2 pre-trained model...")
+    model = InceptionResNetV2(weights='imagenet', include_top=False) 
 
     # ================================================
     # Read images and convert them to feature vectors
     # ================================================
-    imgs, filename_heads, X = [], [], []
+    imgs, filename_heads = [], []
+    img_list = []
     path = "db"
     print("Reading images from '{}' directory...\n".format(path))
-    for f in os.listdir(path):
-
+    for index, f in enumerate(Path(path).iterdir()):
+        if index == 50:
+            break
         # Process filename
-        filename = os.path.splitext(f)  # filename in directory
-        filename_full = os.path.join(path,f)  # full path filename
-        head, ext = filename[0], filename[1]
+        head, ext = f.name, f.suffix
         if ext.lower() not in [".jpg", ".jpeg"]:
             continue
 
         # Read image file
-        img = image.load_img(filename_full, target_size=(224, 224))  # load
+        img = image.load_img(f, target_size=(224, 224))  # load
         imgs.append(np.array(img))  # image
         filename_heads.append(head)  # filename head
 
         # Pre-process for model input
         img = image.img_to_array(img)  # convert to array
         img = np.expand_dims(img, axis=0)
-        img = preprocess_input(img)
-        features = model.predict(img).flatten()  # features
-        X.append(features)  # append feature extractor
+        if len(img_list) > 0:
+            img_list = np.concatenate((img_list, img))
+        else:
+            img_list = img
 
-    X = np.array(X)  # feature vectors
+    img_list = preprocess_input(img_list)
+    X = model.predict(img_list).reshape(len(img_list), -1)
     imgs = np.array(imgs)  # images
     print("imgs.shape = {}".format(imgs.shape))
     print("X_features.shape = {}\n".format(X.shape))
@@ -73,9 +76,9 @@ def main():
     # ==================================================
     # Plot recommendations for each image in database
     # ==================================================
-    output_rec_dir = os.path.join("output", "rec")
-    if not os.path.exists(output_rec_dir):
-        os.makedirs(output_rec_dir)
+    output_rec_dir = Path('output', 'rec')
+    if not output_rec_dir.exists():
+        output_rec_dir.mkdir()
     n_imgs = len(imgs)
     ypixels, xpixels = imgs[0].shape[0], imgs[0].shape[1]
     for ind_query in range(n_imgs):
@@ -88,7 +91,7 @@ def main():
         indices, distances = find_topk_unique(indices, distances, n_neighbours)
 
         # Plot recommendations
-        rec_filename = os.path.join(output_rec_dir, "{}_rec.png".format(filename_heads[ind_query]))
+        rec_filename = Path(output_rec_dir, "{}_rec.png".format(filename_heads[ind_query]))
         x_query_plot = imgs[ind_query].reshape((-1, ypixels, xpixels, 3))
         x_answer_plot = imgs[indices].reshape((-1, ypixels, xpixels, 3))
         plot_query_answer(x_query=x_query_plot,
@@ -98,10 +101,10 @@ def main():
     # ===========================
     # Plot tSNE
     # ===========================
-    output_tsne_dir = os.path.join("output")
-    if not os.path.exists(output_tsne_dir):
-        os.makedirs(output_tsne_dir)
-    tsne_filename = os.path.join(output_tsne_dir, "tsne.png")
+    output_tsne_dir = Path("output")
+    if not output_tsne_dir.exists():
+        output_tsne_dir.mkdir()
+    tsne_filename = Path(output_tsne_dir, "tsne.png")
     print("Plotting tSNE to {}...".format(tsne_filename))
     plot_tsne(imgs, X, tsne_filename)
 
