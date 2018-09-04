@@ -14,10 +14,12 @@ from pathlib import Path
 import numpy as np
 
 import keras
+import face_recognition
 import tensorflow as tf
+from PIL import Image
 from keras.applications.inception_resnet_v2 import (InceptionResNetV2,
                                                     preprocess_input)
-from keras.preprocessing import image
+from keras.preprocessing import image as keras_image
 from src.kNN import kNN
 from src.plot_utils import plot_query_answer
 from src.sort_utils import find_topk_unique
@@ -52,16 +54,31 @@ def main():
         head, ext = file_path.name, file_path.suffix
         if ext.lower() not in [".jpg", ".jpeg"]:
             continue
-
         # Read image file
-        img = image.load_img(str(file_path), target_size=(224, 224))  # load
+        image = face_recognition.load_image_file(file_path)
+        # Find all the faces in the image using the default HOG-based model.
+        # This method is fairly accurate, but not as accurate as the CNN model and not GPU accelerated.
+        # See also: find_faces_in_picture_cnn.py
+        face_locations = face_recognition.face_locations(image, model='cnn')
+        if len(face_locations) != 1:
+            print(len(face_locations))
+            continue
+        else:
+            face_location = face_locations[0]
+        # Print the location of each face in this image
+        top, right, bottom, left = face_location
+        # You can access the actual face itself like this:
+        face_image = image[top:bottom, left:right]
+        img = Image.fromarray(face_image)
+        img = img.resize((98, 98), Image.BILINEAR )
+
         imgs.append(np.array(img))  # image
         filename_heads.append(head)  # filename head
 
         # Pre-process for model input
-        img = image.img_to_array(img)  # convert to array
+        img = keras_image.img_to_array(img)  # convert to array
         img = np.expand_dims(img, axis=0)
-        if len(img_list) > 1:
+        if len(img_list) > 0:
             img_list = np.concatenate((img_list, img))
         else:
             img_list = img
@@ -86,7 +103,7 @@ def main():
     output_rec_dir = Path('output', 'rec')
     if not output_rec_dir.exists():
         output_rec_dir.mkdir()
-    n_imgs = len(imgs)
+    n_imgs = int(len(imgs) / 5)
     ypixels, xpixels = imgs[0].shape[0], imgs[0].shape[1]
     for ind_query in range(n_imgs):
         # Find top-k closest image feature vectors to each vector
