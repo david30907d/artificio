@@ -48,9 +48,7 @@ def main():
     img_list, filename_heads, origin_image_list = [], [], []
     path = "db"
     print("Reading images from '{}' directory...\n".format(path))
-    for index, file_path in enumerate(Path(path).iterdir()):
-        if index == 50:
-            break
+    for file_path in Path(path).iterdir():
         # Process filename
         head, ext = file_path.name, file_path.suffix
         if ext.lower() not in [".jpg", ".jpeg"]:
@@ -113,7 +111,7 @@ def main():
     output_rec_dir = Path('output', 'rec')
     if not output_rec_dir.exists():
         output_rec_dir.mkdir()
-    sample_num = 5
+    sample_num = 50
     _, ypixels, xpixels, _ = origin_image_list.shape
     for ind_query in range(sample_num):
         # Find top-k closest image feature vectors to each vector
