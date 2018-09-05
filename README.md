@@ -1,5 +1,19 @@
 # artificio: A suite of computer vision deep learning algorithms
 
+## Install
+
+1. Install cmake:
+
+	```
+	apt install -y build-essential cmake libgtk-3-dev libboost-all-dev
+	```
+
+2. Install Python dependencies:
+
+	```
+	pip3 install -r requirements.txt
+	```
+
 We provide here a suite of deep learning computer vision algorithms that are ready for real-world use:
 
 ### [Similar Image Finder (using Transfer Learning)](https://github.com/ankonzoid/artificio/tree/master/similar_images_TL)
@@ -27,7 +41,3 @@ We provide here a suite of deep learning computer vision algorithms that are rea
 <p align="center"> 
 <img src="https://github.com/ankonzoid/artificio/blob/master/scrape_google_images/coverart/coverart.jpg" width="50%">
 </p>
-
-#### Authors:
-
-Anson Wong
