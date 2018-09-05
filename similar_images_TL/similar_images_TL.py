@@ -45,49 +45,59 @@ def main():
     # ================================================
     # Read images and convert them to feature vectors
     # ================================================
-    imgs, filename_heads = [], []
-    img_list = []
+    img_list, filename_heads, origin_image_list = [], [], []
     path = "db"
     print("Reading images from '{}' directory...\n".format(path))
-    for file_path in Path(path).iterdir():
+    for index, file_path in enumerate(Path(path).iterdir()):
+        if index == 50:
+            break
         # Process filename
         head, ext = file_path.name, file_path.suffix
         if ext.lower() not in [".jpg", ".jpeg"]:
             continue
+        # also maintain filename list
+        filename_heads.append(head)
+
         # Read image file
-        image = face_recognition.load_image_file(file_path)
+        # numpy format
+        origin_image_numpy = face_recognition.load_image_file(file_path)
         # Find all the faces in the image using the default HOG-based model.
         # This method is fairly accurate, but not as accurate as the CNN model and not GPU accelerated.
         # See also: find_faces_in_picture_cnn.py
-        face_locations = face_recognition.face_locations(image, model='cnn')
+        face_locations = face_recognition.face_locations(origin_image_numpy, model='cnn')
         if len(face_locations) != 1:
-            print(len(face_locations))
+            # means there are multiple faces in a picture
+            # discard this picture
             continue
         else:
             face_location = face_locations[0]
         # Print the location of each face in this image
         top, right, bottom, left = face_location
         # You can access the actual face itself like this:
-        face_image = image[top:bottom, left:right]
-        img = Image.fromarray(face_image)
-        img = img.resize((98, 98), Image.BILINEAR )
-
-        imgs.append(np.array(img))  # image
-        filename_heads.append(head)  # filename head
-
+        face_image_numpy = origin_image_numpy[top:bottom, left:right]
+        face_image_pil = Image.fromarray(face_image_numpy).resize((98, 98), Image.BILINEAR)
         # Pre-process for model input
-        img = keras_image.img_to_array(img)  # convert to array
-        img = np.expand_dims(img, axis=0)
+        face_image_numpy = keras_image.img_to_array(face_image_pil)
+
+        # use origin image to do visualization
+        origin_image_pil = Image.fromarray(origin_image_numpy).resize((224, 224), Image.BILINEAR)
+        origin_image_numpy = keras_image.img_to_array(origin_image_pil)
+
+        # append data to list
+        face_image_numpy = np.expand_dims(face_image_numpy, axis=0)
+        origin_image_numpy = np.expand_dims(origin_image_numpy, axis=0)
         if len(img_list) > 0:
-            img_list = np.concatenate((img_list, img))
+            img_list = np.concatenate((img_list, face_image_numpy))
+            origin_image_list = np.concatenate((origin_image_list, origin_image_numpy))
         else:
-            img_list = img
+            img_list = face_image_numpy
+            origin_image_list = origin_image_numpy
 
     img_list = preprocess_input(img_list)
     predicts = model.predict(img_list).reshape(len(img_list), -1)
-    imgs = np.array(imgs)  # images
-    print("imgs.shape = {}".format(imgs.shape))
-    print("X_features.shape = {}\n".format(predicts.shape))
+    origin_image_list = origin_image_list.astype('uint8')
+    print("origin_image_list.shape = {}".format(origin_image_list.shape))
+    print("predicts.shape = {}\n".format(predicts.shape))
 
     # ===========================
     # Find k-nearest images to each image
@@ -103,12 +113,12 @@ def main():
     output_rec_dir = Path('output', 'rec')
     if not output_rec_dir.exists():
         output_rec_dir.mkdir()
-    n_imgs = int(len(imgs) / 5)
-    ypixels, xpixels = imgs[0].shape[0], imgs[0].shape[1]
-    for ind_query in range(n_imgs):
+    sample_num = 5
+    _, ypixels, xpixels, _ = origin_image_list.shape
+    for ind_query in range(sample_num):
         # Find top-k closest image feature vectors to each vector
         print("[{}/{}] Plotting similar image recommendations \
-        for: {}".format(ind_query+1, n_imgs, filename_heads[ind_query]))
+        for: {}".format(ind_query+1, sample_num, filename_heads[ind_query]))
         distances, indices = knn.predict(np.array([predicts[ind_query]]))
         distances = distances.flatten()
         indices = indices.flatten()
@@ -116,8 +126,8 @@ def main():
 
         # Plot recommendations
         rec_filename = Path(output_rec_dir, "{}_rec.png".format(filename_heads[ind_query]))
-        x_query_plot = imgs[ind_query].reshape((-1, ypixels, xpixels, 3))
-        x_answer_plot = imgs[indices].reshape((-1, ypixels, xpixels, 3))
+        x_query_plot = origin_image_list[ind_query].reshape((-1, ypixels, xpixels, 3))
+        x_answer_plot = origin_image_list[indices].reshape((-1, ypixels, xpixels, 3))
         plot_query_answer(x_query=x_query_plot,
                           x_answer=x_answer_plot[1:],  # remove itself
                           filename=str(rec_filename))
@@ -130,7 +140,7 @@ def main():
         output_tsne_dir.mkdir()
     tsne_filename = Path(output_tsne_dir, "tsne.png")
     print("Plotting tSNE to {}...".format(tsne_filename))
-    plot_tsne(imgs, predicts, str(tsne_filename))
+    plot_tsne(origin_image_list, predicts, str(tsne_filename))
 
 # Driver
 if __name__ == "__main__":
