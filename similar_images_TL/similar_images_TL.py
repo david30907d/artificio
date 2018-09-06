@@ -13,13 +13,14 @@ from pathlib import Path
 
 import numpy as np
 
-import keras
 import face_recognition
+import keras
 import tensorflow as tf
-from PIL import Image
+import tqdm
 from keras.applications.inception_resnet_v2 import (InceptionResNetV2,
                                                     preprocess_input)
 from keras.preprocessing import image as keras_image
+from PIL import Image
 from src.kNN import kNN
 from src.plot_utils import plot_query_answer
 from src.sort_utils import find_topk_unique
@@ -48,7 +49,7 @@ def main():
     img_list, filename_heads, origin_image_list = [], [], []
     path = "db"
     print("Reading images from '{}' directory...\n".format(path))
-    for file_path in Path(path).iterdir():
+    for file_path in tqdm.tqdm(Path(path).iterdir()):
         # Process filename
         head, ext = file_path.name, file_path.suffix
         if ext.lower() not in [".jpg", ".jpeg"]:
@@ -60,9 +61,11 @@ def main():
         # numpy format
         origin_image_numpy = face_recognition.load_image_file(file_path)
         # Find all the faces in the image using the default HOG-based model.
-        # This method is fairly accurate, but not as accurate as the CNN model and not GPU accelerated.
+        # This method is fairly accurate, but not as accurate as the CNN model
+        # and not GPU accelerated.
         # See also: find_faces_in_picture_cnn.py
-        face_locations = face_recognition.face_locations(origin_image_numpy, model='cnn')
+        face_locations = face_recognition.face_locations(origin_image_numpy)
+        # face_locations = face_recognition.face_locations(origin_image_numpy, model='cnn')
         if len(face_locations) != 1:
             # means there are multiple faces in a picture
             # discard this picture
